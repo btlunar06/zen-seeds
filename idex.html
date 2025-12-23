@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Zen Seeds V2 - 3D Branch & Angle Control</title>
+    <style>
+        body { margin: 0; overflow: hidden; background-color: #030305; font-family: 'Segoe UI', sans-serif; }
+        
+        #overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: radial-gradient(circle, #1a1a2e 0%, #050508 100%);
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            z-index: 1000; color: white; transition: opacity 0.5s ease;
+        }
+        #startButton {
+            padding: 18px 45px; font-size: 1.1rem; background: #00ffcc;
+            border: none; border-radius: 50px; cursor: pointer; font-weight: bold;
+            color: #050508; letter-spacing: 2px; box-shadow: 0 0 30px rgba(0, 255, 204, 0.3);
+        }
+
+        #dashboard {
+            position: absolute; top: 20px; left: 20px;
+            width: 250px; padding: 25px; border-radius: 24px;
+            background: rgba(15, 15, 25, 0.7); backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.1); color: white; z-index: 10;
+        }
+        h2 { margin: 0 0 20px 0; font-size: 1rem; letter-spacing: 3px; color: #00ffcc; text-align: center; }
+        .control-group { margin-bottom: 20px; }
+        label { display: block; font-size: 0.7rem; margin-bottom: 8px; opacity: 0.6; text-transform: uppercase; }
+        select, input[type="color"] {
+            width: 100%; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1);
+            color: white; padding: 12px; border-radius: 10px; outline: none; cursor: pointer;
+        }
+        
+        #camera-preview {
+            position: absolute; bottom: 20px; left: 20px;
+            width: 150px; height: 110px; border-radius: 15px;
+            overflow: hidden; border: 1px solid rgba(255,255,255,0.2);
+        }
+        video { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
+
+        .hint { font-size: 0.65rem; opacity: 0.4; line-height: 1.5; margin-top: 20px; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 15px;}
+    </style>
+</head>
+<body>
+
+    <div id="overlay">
+        <h1 style="letter-spacing: 12px; font-weight: 200; margin-bottom: 10px;">ZEN SEEDS V2</h1>
+        <p style="opacity: 0.5; margin-bottom: 40px;">Hand-Controlled 3D Experience</p>
+        <button id="startButton">ENTER SYSTEM</button>
+    </div>
+
+    <div id="dashboard">
+        <h2>DASHBOARD</h2>
+        <div class="control-group">
+            <label>3D Geometry Pattern</label>
+            <select id="patternPicker">
+                <option value="sphere">Spherical Cloud</option>
+                <option value="branch">3D Flower Branch</option>
+                <option value="dna">Double Helix</option>
+                <option value="heart">Sacred Heart</option>
+                <option value="saturn">Planet Saturn</option>
+                <option value="buddha">Zen Statue</option>
+            </select>
+        </div>
+        <div class="control-group">
+            <label>Seed Glow Color</label>
+            <input type="color" id="colorPicker" value="#00ffcc">
+        </div>
+        <div class="hint">
+            <b>GESTURES:</b><br>
+            • Move Hand: Rotate Entire System<br>
+            • Pinch: Zoom Camera<br>
+            • Open Palm: Disperse Seeds
+        </div>
+    </div>
+
+    <div id="camera-preview">
+        <video id="input_video"></video>
+    </div>
+
+    <!-- Libraries -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/0.160.0/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+
+    <script>
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.z = 6;
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+        document.body.appendChild(renderer.domElement);
+
+        const particleCount = 12000;
+        const geometry = new THREE.BufferGeometry();
+        const positions = new Float32Array(particleCount * 3);
+        const targetPositions = new Float32Array(particleCount * 3);
+
+        for (let i = 0; i < particleCount * 3; i++) {
+            positions[i] = (Math.random() - 0.5) * 10;
+            targetPositions[i] = positions[i];
+        }
+
+        geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+        const material = new THREE.PointsMaterial({
+            size: 0.025, color: 0x00ffcc, transparent: true, opacity: 0.8, blending: THREE.AdditiveBlending
+        });
+
+        const seedSystem = new THREE.Points(geometry, material);
+        scene.add(seedSystem);
+
+        function setPattern(shape) {
+            for (let i = 0; i < particleCount; i++) {
+                const i3 = i * 3;
+                const t = i / particleCount;
+
+                if (shape === 'branch') {
+                    // Growing spiraling branch
+                    const angle = t * Math.PI * 15;
+                    const h = (t * 6) - 3; // From -3 to +3
+                    const radius = (t * 0.8) + 0.1;
+                    
+                    // Create side branches (twigs) every few steps
+                    const isTwig = (Math.floor(t * 100) % 15 === 0);
+                    const r = isTwig ? radius * 2.5 : radius;
+
+                    targetPositions[i3] = Math.cos(angle) * r;
+                    targetPositions[i3+1] = h;
+                    targetPositions[i3+2] = Math.sin(angle) * r;
+                }
+                else if (shape === 'dna') {
+                    const angle = t * Math.PI * 8;
+                    const side = i % 2 === 0 ? 1 : -1;
+                    targetPositions[i3] = Math.cos(angle) * side;
+                    targetPositions[i3+1] = (t * 6) - 3;
+                    targetPositions[i3+2] = Math.sin(angle) * side;
+                }
+                else if (shape === 'heart') {
+                    const angle = t * Math.PI * 2;
+                    targetPositions[i3] = 0.15 * (16 * Math.pow(Math.sin(angle), 3));
+                    targetPositions[i3+1] = 0.15 * (13 * Math.cos(angle) - 5 * Math.cos(2*angle) - 2 * Math.cos(3*angle) - Math.cos(4*angle));
+                    targetPositions[i3+2] = (Math.random() - 0.5) * 0.5;
+                }
+                else if (shape === 'saturn') {
+                    if (i < particleCount * 0.5) {
+                        const phi = Math.acos(2 * Math.random() - 1);
+                        const theta = Math.random() * Math.PI * 2;
+                        targetPositions[i3] = 1.3 * Math.sin(phi) * Math.cos(theta);
+                        targetPositions[i3+1] = 1.3 * Math.sin(phi) * Math.sin(theta);
+                        targetPositions[i3+2] = 1.3 * Math.cos(phi);
+                    } else {
+                        const angle = Math.random() * Math.PI * 2;
+                        const r = 2.0 + Math.random() * 0.8;
+                        targetPositions[i3] = Math.cos(angle) * r;
+                        targetPositions[i3+1] = (Math.random() - 0.5) * 0.1;
+                        targetPositions[i3+2] = Math.sin(angle) * r;
+                    }
+                }
+                else { // Sphere
+                    const phi = Math.acos(2 * Math.random() - 1);
+                    const theta = Math.random() * Math.PI * 2;
+                    targetPositions[i3] = 2.5 * Math.sin(phi) * Math.cos(theta);
+                    targetPositions[i3+1] = 2.5 * Math.sin(phi) * Math.sin(theta);
+                    targetPositions[i3+2] = 2.5 * Math.cos(phi);
+                }
+            }
+        }
+
+        let zoomTarget = 6;
+        let scatterAmount = 0;
+        let rotateXTarget = 0;
+        let rotateYTarget = 0;
+
+        const hands = new Hands({ locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}` });
+        hands.setOptions({ maxNumHands: 1, modelComplexity: 1, minDetectionConfidence: 0.6 });
+
+        hands.onResults((results) => {
+            if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+                const lm = results.multiHandLandmarks[0];
+                
+                // --- ANGLE CONTROL ---
+                // We use the middle of the palm to determine the rotation
+                rotateYTarget = (lm[9].x - 0.5) * 5; // Left-Right tilt
+                rotateXTarget = (lm[9].y - 0.5) * 5; // Up-Down tilt
+
+                // Pinch (Zoom)
+                const pinch = Math.hypot(lm[4].x - lm[8].x, lm[4].y - lm[8].y);
+                zoomTarget = 2 + (pinch * 15);
+
+                // Disperse
+                const palmOpen = Math.hypot(lm[0].x - lm[12].x, lm[0].y - lm[12].y);
+                scatterAmount = palmOpen > 0.45 ? (palmOpen - 0.45) * 3 : 0;
+            } else {
+                scatterAmount = 0;
+            }
+        });
+
+        document.getElementById('startButton').addEventListener('click', () => {
+            const video = document.getElementById('input_video');
+            const cam = new Camera(video, {
+                onFrame: async () => { await hands.send({image: video}); },
+                width: 640, height: 480
+            });
+            cam.start();
+            document.getElementById('overlay').style.opacity = '0';
+            setTimeout(() => document.getElementById('overlay').style.display = 'none', 500);
+        });
+
+        function animate() {
+            requestAnimationFrame(animate);
+            const pos = seedSystem.geometry.attributes.position.array;
+            for (let i = 0; i < particleCount * 3; i++) {
+                pos[i] += (targetPositions[i] - pos[i]) * 0.04;
+                if (scatterAmount > 0) pos[i] += (Math.random() - 0.5) * scatterAmount;
+            }
+            seedSystem.geometry.attributes.position.needsUpdate = true;
+
+            // Apply smooth rotation and zoom
+            camera.position.z += (zoomTarget - camera.position.z) * 0.1;
+            seedSystem.rotation.y += (rotateYTarget - seedSystem.rotation.y) * 0.05;
+            seedSystem.rotation.x += (rotateXTarget - seedSystem.rotation.x) * 0.05;
+            
+            // Constant idle rotation
+            seedSystem.rotation.y += 0.001;
+
+            renderer.render(scene, camera);
+        }
+        animate();
+
+        document.getElementById('patternPicker').addEventListener('change', (e) => setPattern(e.target.value));
+        document.getElementById('colorPicker').addEventListener('input', (e) => material.color.set(e.target.value));
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+    </script>
+</body>
+</html>
